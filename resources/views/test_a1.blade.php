@@ -1,76 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Dynamic PDF Filler</title>
-  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-  <style>
-    body { font-family: sans-serif; padding: 20px; }
-    #inputs { margin-top: 20px; }
-    input { display: block; margin-bottom: 10px; width: 300px; padding: 6px; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Get PDF Field Positions</title>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 </head>
+
 <body>
-  <h2>Upload PDF and Fill Dynamically</h2>
+    {{-- <h3>Upload PDF to see field positions</h3> --}}
+    {{-- <input type="file" id="pdfFile" accept="application/pdf"> --}}
+    <button id="showFields">Show Field Positions</button>
 
-  <input type="file" id="pdfFile" accept="application/pdf">
-  <button id="load">Load Fields</button>
+    <script>
+        document.getElementById('showFields').addEventListener('click', async () => {
+            const fileUrl = window.location.origin + "/files/md.pdf";
+            // console.log(file);
 
-  <form id="inputs"></form>
+            //   if (!file) return alert('Choose a PDF first.');
+            try {
+                const file = await fetch(fileUrl);
+                if (!file.ok) throw new Error('Failed to fetch PDF.');
+                // const file = await fetch(fileUrl);
+                const arrayBuffer = await file.arrayBuffer();
+                const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
 
-  <button id="fill" style="display:none;">Fill & Download PDF</button>
+                const form = pdfDoc.getForm();
+                console.log(form);
 
-  <script>
-    let fieldNames = [];
-    let pdfDoc;
+                const fields = form.getFields();
 
-    document.getElementById('load').addEventListener('click', async () => {
-      const file = document.getElementById('pdfFile').files[0];
-      if (!file) return alert('Choose a PDF first.');
+                console.log('📍 PDF Fields Found:');
+                for (const field of fields) {
+                    const name = field.getName();
+                    const type = field.constructor.name;
+                    const widgets = field.acroField.getWidgets();
 
-      const arrayBuffer = await file.arrayBuffer();
-      pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
-      const form = pdfDoc.getForm();
-      const fields = form.getFields();
+                    widgets.forEach((widget, i) => {
+                        const rect = widget.getRectangle ? widget.getRectangle() : widget.dict.get(
+                            'Rect');
+                        let coords;
 
-      fieldNames = fields.map(f => f.getName());
+                        if (rect && rect.length === 4) {
+                            // بعض الإصدارات بترجع مصفوفة [x1, y1, x2, y2]
+                            const [x1, y1, x2, y2] = rect;
+                            coords = {
+                                x: x1,
+                                y: y1,
+                                width: x2 - x1,
+                                height: y2 - y1
+                            };
+                        } else if (rect && rect.x !== undefined) {
+                            // لو الكائن فيه خصائص جاهزة
+                            coords = {
+                                x: rect.x,
+                                y: rect.y,
+                                width: rect.width,
+                                height: rect.height
+                            };
+                        } else {
+                            coords = {
+                                x: '?',
+                                y: '?',
+                                width: '?',
+                                height: '?'
+                            };
+                        }
 
-      // إنشاء مدخلات تلقائيًا
-      const formContainer = document.getElementById('inputs');
-      formContainer.innerHTML = '';
-      fieldNames.forEach(name => {
-        const input = document.createElement('input');
-        input.placeholder = name;
-        input.name = name;
-        formContainer.appendChild(input);
-      });
-
-      document.getElementById('fill').style.display = 'inline-block';
-      alert('Fields loaded! Fill the inputs below.');
-    });
-
-    document.getElementById('fill').addEventListener('click', async (e) => {
-      e.preventDefault();
-      if (!pdfDoc) return alert('Load a PDF first.');
-
-      const form = pdfDoc.getForm();
-
-      fieldNames.forEach(name => {
-        const value = document.querySelector(`[name="${CSS.escape(name)}"]`).value || '';
-        try {
-          form.getTextField(name).setText(value);
-        } catch (e) {
-          console.warn('Could not set field:', name, e);
-        }
-      });
-
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'filled.pdf';
-      link.click();
-    });
-  </script>
+                        console.log({
+                            name,
+                            type,
+                            widgetIndex: i + 1,
+                            x: coords.x,
+                            y: coords.y,
+                            width: coords.width,
+                            height: coords.height
+                        });
+                    });
+                }
+            } catch (error) {
+                alert('Error loading PDF: ' + error.message);
+            }
+        });
+    </script>
 </body>
+
 </html>

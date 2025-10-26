@@ -11,3 +11,6 @@ Route::get('/test-1', function () {
 Route::get('/test-2', function () {
     return view('test_a1');
 });
+Route::get('/test-chat', function () {
+    return view('test-chat');
+});
