@@ -8,3 +8,6 @@ Route::get('/', function () {
 Route::get('/test 1', function () {
     return view('test_y1');
 });
+Route::get('/test 2', function () {
+    return view('test_a1');
+});
