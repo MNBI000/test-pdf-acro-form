@@ -2,74 +2,57 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Dynamic PDF Filler</title>
+  <title>Get PDF Field Positions</title>
   <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-  <style>
-    body { font-family: sans-serif; padding: 20px; }
-    #inputs { margin-top: 20px; }
-    input { display: block; margin-bottom: 10px; width: 300px; padding: 6px; }
-  </style>
 </head>
 <body>
-  <h2>Upload PDF and Fill Dynamically</h2>
-
+  <h3>Upload PDF to see field positions</h3>
   <input type="file" id="pdfFile" accept="application/pdf">
-  <button id="load">Load Fields</button>
-
-  <form id="inputs"></form>
-
-  <button id="fill" style="display:none;">Fill & Download PDF</button>
+  <button id="showFields">Show Field Positions</button>
 
   <script>
-    let fieldNames = [];
-    let pdfDoc;
-
-    document.getElementById('load').addEventListener('click', async () => {
+    document.getElementById('showFields').addEventListener('click', async () => {
       const file = document.getElementById('pdfFile').files[0];
       if (!file) return alert('Choose a PDF first.');
 
       const arrayBuffer = await file.arrayBuffer();
-      pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+      const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+
       const form = pdfDoc.getForm();
       const fields = form.getFields();
 
-      fieldNames = fields.map(f => f.getName());
+      console.log('📍 PDF Fields Found:');
+      for (const field of fields) {
+        const name = field.getName();
+        const type = field.constructor.name;
+        const widgets = field.acroField.getWidgets();
 
-      // إنشاء مدخلات تلقائيًا
-      const formContainer = document.getElementById('inputs');
-      formContainer.innerHTML = '';
-      fieldNames.forEach(name => {
-        const input = document.createElement('input');
-        input.placeholder = name;
-        input.name = name;
-        formContainer.appendChild(input);
-      });
+        widgets.forEach((widget, i) => {
+          const rect = widget.getRectangle ? widget.getRectangle() : widget.dict.get('Rect');
+          let coords;
 
-      document.getElementById('fill').style.display = 'inline-block';
-      alert('Fields loaded! Fill the inputs below.');
-    });
+          if (rect && rect.length === 4) {
+            // بعض الإصدارات بترجع مصفوفة [x1, y1, x2, y2]
+            const [x1, y1, x2, y2] = rect;
+            coords = { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
+          } else if (rect && rect.x !== undefined) {
+            // لو الكائن فيه خصائص جاهزة
+            coords = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+          } else {
+            coords = { x: '?', y: '?', width: '?', height: '?' };
+          }
 
-    document.getElementById('fill').addEventListener('click', async (e) => {
-      e.preventDefault();
-      if (!pdfDoc) return alert('Load a PDF first.');
-
-      const form = pdfDoc.getForm();
-
-      fieldNames.forEach(name => {
-        const value = document.querySelector(`[name="${CSS.escape(name)}"]`).value || '';
-        try {
-          form.getTextField(name).setText(value);
-        } catch (e) {
-          console.warn('Could not set field:', name, e);
-        }
-      });
-
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'filled.pdf';
-      link.click();
+          console.log({
+            name,
+            type,
+            widgetIndex: i + 1,
+            x: coords.x,
+            y: coords.y,
+            width: coords.width,
+            height: coords.height
+          });
+        });
+      }
     });
   </script>
 </body>
